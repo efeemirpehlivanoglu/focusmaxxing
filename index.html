@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FOCUSMAXXING</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #0a0a0a;
+            color: #ffffff;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            text-align: center;
+            overflow: hidden;
+        }
+        h1 {
+            font-size: 3rem;
+            letter-spacing: 5px;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+        }
+        p.subtitle {
+            color: #666;
+            margin-bottom: 40px;
+        }
+        .timer {
+            font-size: 8rem;
+            font-weight: bold;
+            margin: 20px 0;
+            color: #e0e0e0;
+        }
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        select, button {
+            background-color: #1a1a1a;
+            color: #fff;
+            border: 1px solid #333;
+            padding: 15px 25px;
+            font-size: 1.2rem;
+            font-family: 'Courier New', Courier, monospace;
+            cursor: pointer;
+            text-transform: uppercase;
+            outline: none;
+        }
+        button {
+            background-color: #fff;
+            color: #000;
+            font-weight: bold;
+            transition: 0.2s;
+        }
+        button:hover {
+            background-color: #ccc;
+        }
+        button.stop-btn {
+            background-color: #ff3333;
+            color: white;
+            border-color: #ff3333;
+        }
+        button.stop-btn:hover {
+            background-color: #cc0000;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Focusmaxxing</h1>
+    <p class="subtitle">Maksimum Odak. Sınır Yok.</p>
+    
+    <div class="timer" id="timeDisplay">00:00</div>
+
+    <div class="controls">
+        <select id="audioChoice">
+            <option value="brown">Brown Noise (Derin Uğultu)</option>
+            <option value="pink">Pink Noise (Şelale/Yağmur)</option>
+            <option value="white">White Noise (TV Karıncalanması)</option>
+            <option value="lofi">Lo-Fi Radio (7/24 Stream)</option>
+        </select>
+        <button id="focusBtn" onclick="toggleFocus()">FOCUS</button>
+    </div>
+
+    <!-- YouTube yerine doğrudan internet radyosu (saf ses) -->
+    <audio id="lofi-player" src="https://stream.zeno.fm/f3wvbbqmdg8uv" preload="none"></audio>
+
+    <script>
+        let timerInterval;
+        let isRunning = false;
+        let totalSeconds = 0;
+        let audioCtx;
+
+        function toggleFocus() {
+            let btn = document.getElementById('focusBtn');
+            let selectBox = document.getElementById('audioChoice');
+
+            if (!isRunning) {
+                // BAŞLATMA VE F11 TAM EKRAN
+                if (document.documentElement.requestFullscreen) {
+                    document.documentElement.requestFullscreen().catch(e => console.log(e));
+                }
+
+                playAudio(selectBox.value);
+
+                btn.innerText = "BİTİR (STOP)";
+                btn.classList.add("stop-btn");
+                selectBox.disabled = true;
+                isRunning = true;
+
+                timerInterval = setInterval(function () {
+                    totalSeconds++;
+                    updateDisplay();
+                }, 1000);
+
+            } else {
+                // DURDURMA VE TAM EKRANDAN ÇIKMA
+                if (document.exitFullscreen) {
+                    document.exitFullscreen().catch(e => console.log(e));
+                }
+
+                clearInterval(timerInterval);
+                stopAudio();
+
+                btn.innerText = "YENİDEN BAŞLAT";
+                btn.classList.remove("stop-btn");
+                selectBox.disabled = false;
+                isRunning = false;
+            }
+        }
+
+        function updateDisplay() {
+            let hours = Math.floor(totalSeconds / 3600);
+            let minutes = Math.floor((totalSeconds % 3600) / 60);
+            let seconds = totalSeconds % 60;
+
+            let h = hours > 0 ? (hours < 10 ? "0" + hours + ":" : hours + ":") : "";
+            let m = minutes < 10 ? "0" + minutes : minutes;
+            let s = seconds < 10 ? "0" + seconds : seconds;
+
+            document.getElementById('timeDisplay').textContent = h + m + ":" + s;
+        }
+
+        function playAudio(type) {
+            stopAudio(); // Varsa öncekini kesin durdur
+
+            // LO-FI RADYO YAYINI (YouTube hatası vermez)
+            if (type === 'lofi') {
+                let player = document.getElementById('lofi-player');
+                player.volume = 0.5; // Sesi %50'de başlat
+                player.play();
+                return;
+            }
+
+            // DİĞER SESLER İÇİN WEB AUDIO API
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            let bufferSize = 4096;
+
+            if (type === 'white') {
+                let whiteNoise = audioCtx.createScriptProcessor(bufferSize, 1, 1);
+                whiteNoise.onaudioprocess = function(e) {
+                    let output = e.outputBuffer.getChannelData(0);
+                    for (let i = 0; i < bufferSize; i++) {
+                        output[i] = (Math.random() * 2 - 1) * 0.05;
+                    }
+                }
+                whiteNoise.connect(audioCtx.destination);
+            } 
+            else if (type === 'brown') {
+                let brownNoise = audioCtx.createScriptProcessor(bufferSize, 1, 1);
+                let lastOut = 0;
+                brownNoise.onaudioprocess = function(e) {
+                    let output = e.outputBuffer.getChannelData(0);
+                    for (let i = 0; i < bufferSize; i++) {
+                        let white = Math.random() * 2 - 1;
+                        output[i] = (lastOut + (0.02 * white)) / 1.02;
+                        lastOut = output[i];
+                        output[i] *= 2.0; 
+                    }
+                }
+                brownNoise.connect(audioCtx.destination);
+            }
+            else if (type === 'pink') {
+                // Pembe Gürültü (Pink Noise) Matematiksel Filtresi
+                let pinkNoise = audioCtx.createScriptProcessor(bufferSize, 1, 1);
+                let b0, b1, b2, b3, b4, b5, b6;
+                b0 = b1 = b2 = b3 = b4 = b5 = b6 = 0.0;
+                pinkNoise.onaudioprocess = function(e) {
+                    let output = e.outputBuffer.getChannelData(0);
+                    for (let i = 0; i < bufferSize; i++) {
+                        let white = Math.random() * 2 - 1;
+                        b0 = 0.99886 * b0 + white * 0.0555179;
+                        b1 = 0.99332 * b1 + white * 0.0750759;
+                        b2 = 0.96900 * b2 + white * 0.1538520;
+                        b3 = 0.86650 * b3 + white * 0.3104856;
+                        b4 = 0.55000 * b4 + white * 0.5329522;
+                        b5 = -0.7616 * b5 - white * 0.0168980;
+                        output[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
+                        output[i] *= 0.03; // Sesi dengeler
+                        b6 = white * 0.115926;
+                    }
+                }
+                pinkNoise.connect(audioCtx.destination);
+            }
+        }
+
+        function stopAudio() {
+            // Kodla üretilen sesi kapat
+            if (audioCtx) {
+                audioCtx.close();
+                audioCtx = null;
+            }
+            // Lofi radyosunu kapat
+            let player = document.getElementById('lofi-player');
+            player.pause();
+            player.currentTime = 0; // Başa sar
+        }
+    </script>
+</body>
+</html>
